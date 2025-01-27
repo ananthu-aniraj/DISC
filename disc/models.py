@@ -55,6 +55,8 @@ class NetBottom(nn.Module):
         if 'dense' in self.model_type:
             x = F.relu(x, inplace=True)
             x = F.adaptive_avg_pool2d(x, (1, 1))
+        elif 'vit' in self.model_type:
+            x = x[:, 0]
         x = torch.flatten(x, 1)
         return x
 
