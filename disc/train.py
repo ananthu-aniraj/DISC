@@ -8,7 +8,7 @@ import torch.nn.functional as F
 
 from disc.utils.loss import LossComputer
 from disc.utils.cluster import cluter_assignment
-from disc.utils.tools import CSVLogger, set_required_grad, get_optimizer, get_scheduler
+from disc.utils.tools import CSVLogger, set_required_grad, get_optimizer, get_scheduler, calculate_weight_decay
 
 from disc.models import NetBottom, NetTop
 from disc.run_epoch_disc import run_epoch_disc
@@ -71,6 +71,7 @@ def train(
         )
 
     # Set up optimizer & scheduler
+    args.weight_decay = calculate_weight_decay(args, dataset['train_data'])
     t_total = args.n_epochs
     optimizer = get_optimizer(args, model)
     scheduler = get_scheduler(args, optimizer, t_total)

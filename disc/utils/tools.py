@@ -1,6 +1,7 @@
 import sys
 import os
 import torch
+import math
 import numpy as np
 import csv
 import argparse
@@ -155,11 +156,65 @@ def get_model(args, n_classes, d=None, resume=False):
         d = model.classifier.in_features
         model.classifier = nn.Linear(d, n_classes)
     elif args.model == 'vit_base_patch14_reg4_dinov2.lvd142m':
-        model = timm.create_model('vit_base_patch14_reg4_dinov2.lvd142m', pretrained=True, num_classes=n_classes, img_size=224)
+        model = timm.create_model('vit_base_patch14_reg4_dinov2.lvd142m', pretrained=True, num_classes=n_classes,
+                                  img_size=224)
         d = model.embed_dim
     else:
         raise ValueError('Model not recognized.')
     return model
+
+
+def calculate_weight_decay(args, dataset_train):
+    """
+    Function to calculate the weight decay
+    Implementation of normalized weight decay as per the paper "Decoupled Weight Decay Regularization": https://arxiv.org/pdf/1711.05101.pdf
+    :param args: Arguments from the command line
+    :param dataset_train: Training dataset
+    :return: weight_decay: Weight decay
+    """
+    batch_size = calculate_effective_batch_size(args)
+    num_iterations = len(dataset_train) // batch_size  # Since we set drop_last=True
+    norm_weight_decay = args.weight_decay
+    weight_decay = norm_weight_decay * math.sqrt(1 / (num_iterations * args.epochs))
+    return weight_decay
+
+
+def calculate_effective_batch_size(args):
+    """
+    Calculate the effective batch size for DDP
+    :param args: Arguments from the argument parser
+    :return:
+    effective_batch_size: int, effective batch size
+    """
+    batch_size = args.batch_size
+    use_ddp = multi_gpu_check()
+    is_slurm_job = "SLURM_NODEID" in os.environ
+    if is_slurm_job:
+        # number of processes / GPUs per node
+        world_size = int(os.environ['SLURM_NTASKS'])
+    else:
+        if use_ddp:
+            world_size = int(os.environ['WORLD_SIZE'])
+        else:
+            world_size = 1
+
+    effective_batch_size = batch_size * world_size
+    return effective_batch_size
+
+
+def multi_gpu_check():
+    """
+    Check if there are multiple GPUs available for DDP
+    :return:
+    use_ddp: bool, whether to use DDP or not
+    """
+    torchrun_active = int(os.environ.get('RANK', -1)) != -1  # is this a ddp run?
+    slurm_active = "SLURM_NODEID" in os.environ  # is this a slurm job?
+    if slurm_active:
+        # Check device count
+        slurm_active = torch.cuda.device_count() > 1
+    use_ddp = torchrun_active or slurm_active
+    return use_ddp
 
 
 def get_optimizer_weights(args, weights):
