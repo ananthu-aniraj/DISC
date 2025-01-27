@@ -93,6 +93,11 @@ def get_optimizer(args, model):
             filter(lambda p: p.requires_grad, model.parameters()),
             lr=args.lr,
             weight_decay=args.weight_decay)
+    elif args.optimizer.lower() == 'adamw':
+        optimizer = torch.optim.AdamW(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=args.lr,
+            weight_decay=args.weight_decay)
     else:
         raise ValueError(f"{args.optimizer} not recognized")
     return optimizer
@@ -144,6 +149,11 @@ def get_optimizer_weights(args, weights):
             weight_decay=args.weight_decay)
     elif args.optimizer == 'Adam':
         optimizer = torch.optim.Adam(
+            weights,
+            lr=args.lr,
+            weight_decay=args.weight_decay)
+    elif args.optimizer.lower() == 'adamw':
+        optimizer = torch.optim.AdamW(
             weights,
             lr=args.lr,
             weight_decay=args.weight_decay)
