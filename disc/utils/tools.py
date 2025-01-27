@@ -175,7 +175,7 @@ def calculate_weight_decay(args, dataset_train):
     batch_size = calculate_effective_batch_size(args)
     num_iterations = len(dataset_train) // batch_size  # Since we set drop_last=True
     norm_weight_decay = args.weight_decay
-    weight_decay = norm_weight_decay * math.sqrt(1 / (num_iterations * args.epochs))
+    weight_decay = norm_weight_decay * math.sqrt(1 / (num_iterations * args.n_epochs))
     return weight_decay
 
 
