@@ -13,6 +13,7 @@ from torch.optim.lr_scheduler import StepLR
 from transformers import (get_linear_schedule_with_warmup,
                           get_cosine_schedule_with_warmup)
 import torchvision
+import timm
 from disc.models import model_attributes
 from disc.models import ResNet50
 
@@ -69,10 +70,10 @@ def set_log_dir(args):
         string = f'robust_step_size={args.robust_step_size}'
     elif args.coral:
         method = 'Coral'
-        string =  f''
+        string = f''
     else:
         method = 'ERM'
-        string =  f''
+        string = f''
     if len(string):
         string += f'-{common_string}'
     else:
@@ -126,13 +127,15 @@ def get_model(args, n_classes, d=None, resume=False):
         model = torchvision.models.densenet121(pretrained=pretrained)
         d = model.classifier.in_features
         model.classifier = nn.Linear(d, n_classes)
+    elif args.model == 'vit_base_patch14_reg4_dinov2.lvd142m':
+        model = timm.create_model('vit_base_patch14_reg4_dinov2.lvd142m', pretrained=True, num_classes=n_classes, img_size=224)
+        d = model.embed_dim
     else:
         raise ValueError('Model not recognized.')
     return model
 
 
 def get_optimizer_weights(args, weights):
-    
     if args.optimizer == 'SGD':
         optimizer = torch.optim.SGD(
             weights,
@@ -162,7 +165,7 @@ def get_scheduler(args, optimizer, t_total):
 
     if args.scheduler == 'CosineAnnealingLR':
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, 
+            optimizer,
             T_max=t_total)
 
     elif args.scheduler == 'linear_schedule_with_warmup':
@@ -179,11 +182,11 @@ def get_scheduler(args, optimizer, t_total):
             optimizer,
             num_training_steps=t_total,
             num_warmup_steps=args.num_warmup_steps)
-        
+
     elif args.scheduler == 'StepLR':
         scheduler = StepLR(optimizer,
-                            step_size=1,
-                            gamma=args.step_gamma)
+                           step_size=1,
+                           gamma=args.step_gamma)
 
     else:
         scheduler = None
@@ -192,6 +195,7 @@ def get_scheduler(args, optimizer, t_total):
 
 class Identity(nn.Module):
     """An identity layer"""
+
     def __init__(self, d):
         super().__init__()
         self.in_features = d
@@ -246,7 +250,7 @@ class CSVLogger:
         self.file = open(csv_path, mode)
         self.columns = columns
         self.writer = csv.DictWriter(self.file, fieldnames=columns)
-        if mode=='w':
+        if mode == 'w':
             self.writer.writeheader()
 
     def log(self, epoch, stats_dict):
@@ -288,7 +292,7 @@ class CSVBatchLogger:
         self.file = open(csv_path, mode)
         self.columns = columns
         self.writer = csv.DictWriter(self.file, fieldnames=columns)
-        if mode=='w':
+        if mode == 'w':
             self.writer.writeheader()
 
     def log(self, epoch, batch, stats_dict):
@@ -305,6 +309,7 @@ class CSVBatchLogger:
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
+
     def __init__(self):
         self.reset()
 
@@ -348,11 +353,11 @@ def set_seed(seed):
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 
+
 def log_args(args, logger):
     for argname, argval in vars(args).items():
-        logger.write(f'{argname.replace("_"," ").capitalize()}: {argval}\n')
+        logger.write(f'{argname.replace("_", " ").capitalize()}: {argval}\n')
     logger.write('\n')
-
 
 
 # Taken from https://sumit-ghosh.com/articles/parsing-dictionary-key-value-pairs-kwargs-argparse-python/
@@ -361,9 +366,9 @@ class ParseKwargs(argparse.Action):
         setattr(namespace, self.dest, dict())
         for value in values:
             key, value_str = value.split('=')
-            if value_str.replace('-','').isnumeric():
+            if value_str.replace('-', '').isnumeric():
                 processed_val = int(value_str)
-            elif value_str.replace('-','').replace('.','').isnumeric():
+            elif value_str.replace('-', '').replace('.', '').isnumeric():
                 processed_val = float(value_str)
             elif value_str in ['True', 'true']:
                 processed_val = True
@@ -372,8 +377,8 @@ class ParseKwargs(argparse.Action):
             else:
                 processed_val = value_str
             getattr(namespace, self.dest)[key] = processed_val
-            
-            
+
+
 class ParamDict(OrderedDict):
     """A dictionary where the values are Tensors, meant to represent weights of
     a model. This subclass lets you perform arithmetic on weights directly."""
