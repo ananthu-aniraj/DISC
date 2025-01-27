@@ -14,6 +14,7 @@ from transformers import (get_linear_schedule_with_warmup,
                           get_cosine_schedule_with_warmup)
 import torchvision
 import timm
+from typing import Collection
 from disc.models import model_attributes
 from disc.models import ResNet50
 
@@ -81,23 +82,43 @@ def set_log_dir(args):
     args.log_dir = os.path.join(args.log_dir, args.dataset, method, string)
 
 
+def param_groups_weight_decay(
+        model: nn.Module,
+        weight_decay: float = 1e-5,
+        no_weight_decay_list: Collection[str] = (),
+):
+    no_weight_decay_list = set(no_weight_decay_list)
+    decay = []
+    no_decay = []
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+
+        if param.ndim <= 1 or name.endswith(".bias") or name in no_weight_decay_list:
+            no_decay.append(param)
+        else:
+            decay.append(param)
+
+    return [
+        {'params': no_decay, 'weight_decay': 0.},
+        {'params': decay, 'weight_decay': weight_decay}]
+
+
 def get_optimizer(args, model):
+    param_groups = param_groups_weight_decay(
+        model,
+        weight_decay=args.weight_decay,
+        no_weight_decay_list=args.no_weight_decay_list)
     if args.optimizer == 'SGD':
         optimizer = torch.optim.SGD(
-            filter(lambda p: p.requires_grad, model.parameters()),
+            param_groups,
             lr=args.lr,
-            momentum=0.9,
-            weight_decay=args.weight_decay)
+            momentum=0.9)
     elif args.optimizer == 'Adam':
-        optimizer = torch.optim.Adam(
-            filter(lambda p: p.requires_grad, model.parameters()),
-            lr=args.lr,
-            weight_decay=args.weight_decay)
+        optimizer = torch.optim.Adam(param_groups, lr=args.lr)
     elif args.optimizer.lower() == 'adamw':
         optimizer = torch.optim.AdamW(
-            filter(lambda p: p.requires_grad, model.parameters()),
-            lr=args.lr,
-            weight_decay=args.weight_decay)
+            param_groups, lr=args.lr)
     else:
         raise ValueError(f"{args.optimizer} not recognized")
     return optimizer
@@ -105,6 +126,7 @@ def get_optimizer(args, model):
 
 def get_model(args, n_classes, d=None, resume=False):
     pretrained = not args.train_from_scratch
+    args.no_weight_decay_list = ['pos_embed', 'cls_token', 'reg_token']
     if resume:
         model = torch.load(os.path.join(args.log_dir, 'last_model.pth'))
     elif args.dataset == 'CIFAR10':
